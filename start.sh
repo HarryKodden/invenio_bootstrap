@@ -119,7 +119,7 @@ docker exec ${INSTANCE_NAME}-bootstrap bash -c "mkdir -p ${INVENIO_INSTANCE_PATH
 docker exec ${INSTANCE_NAME}-bootstrap bash -c "cd /opt/${INSTANCE_NAME}; ./scripts/bootstrap"
 
 echo "Finalizing image !"
-docker commit -c "ENV INVENIO_INSTANCE_PATH ${INVENIO_INSTANCE_PATH}" ${INSTANCE_NAME}-bootstrap ${INSTANCE_NAME}-base
+docker commit -c "ENV INVENIO_INSTANCE_PATH ${INVENIO_INSTANCE_PATH}" -c "WORKDIR /opt/${INSTANCE_NAME}" ${INSTANCE_NAME}-bootstrap ${INSTANCE_NAME}-base
 docker stop ${INSTANCE_NAME}-bootstrap
 docker rm ${INSTANCE_NAME}-bootstrap
 
