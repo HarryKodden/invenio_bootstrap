@@ -6,7 +6,7 @@ PROJECT_NAME=B2SHARE
 PROJECT_SITE=b2share.eudat.eu
 INSTANCE_NAME=b2share
 
-GITHUB_REPO=EUDAT-B2SHARE/b2share
+GITHUB_REPO=HarryKodden/b2share-new
 DESCRIPTION='EUDAT Collaborative Data Infrastructure.'
 AUTHOR_NAME=EUDAT
 AUTHOR_EMAIL=info@eudat.eu
@@ -35,7 +35,7 @@ docker run -v /tmp:/tmp ${INSTANCE_NAME} cookiecutter ${INSTANCE_TEMPLATE} --che
           project_site=${PROJECT_SITE} \
           package_name=${INSTANCE_NAME} \
           github_repo=${GITHUB_REPO} \
-          description='${DESCRIPTION}' \
+          description="${DESCRIPTION}" \
           author_name=${AUTHOR_NAME} \
           author_email=${AUTHOR_EMAIL} \
           database=${DATABASE} \
@@ -44,7 +44,7 @@ docker run -v /tmp:/tmp ${INSTANCE_NAME} cookiecutter ${INSTANCE_TEMPLATE} --che
 
 echo "Start templating module..."
 sudo rm -rf ${WORKDIR}/${MODULE_NAME}
-docker run -v /tmp:/tmp ${MODULE_NAME} cookiecutter ${MODULE_TEMPLATE} --no-input -o ${WORKDIR} \
+docker run -v /tmp:/tmp ${INSTANCE_NAME} cookiecutter ${MODULE_TEMPLATE} --no-input -o ${WORKDIR} \
           project_name=${PROJECT_NAME}_${MODULE_PREFIX} \
           package_name=${MODULE_NAME} \
           github_repo=${GITHUB_REPO} \
@@ -60,21 +60,44 @@ EOT
 
 sudo cp -r ${WORKDIR}/${MODULE_NAME}/${MODULE_NAME} ${WORKDIR}/${INSTANCE_NAME}/${INSTANCE_NAME}/modules
 
+sudo tee -a ${WORKDIR}/${INSTANCE_NAME}/entry_points.txt > /dev/null <<EOT
+[invenio_base.apps]
+${MODULE_NAME} = ${INSTANCE_NAME}.modules.${MODULE_NAME}:${PROJECT_NAME}_${MODULE_PREFIX}
+
+[invenio_base.api_apps]
+${MODULE_NAME} = ${INSTANCE_NAME}.modules.${MODULE_NAME}:${PROJECT_NAME}_${MODULE_PREFIX}
+
+[invenio_base.blueprints]
+${MODULE_NAME} = ${INSTANCE_NAME}.modules.${MODULE_NAME}.views:blueprint
+EOT
+
 sudo sed -i "/^setup(*/i def my_setup(**kwargs):\n\
-    kwargs['entry_points']['invenio_base.api_apps'].append('${MODULE_NAME} = ${INSTANCE_NAME}.modules.${MODULE_NAME}:${PROJECT_NAME}_${MODULE_PREFIX}')\n\
-    kwargs['entry_points']['invenio_base.blueprints'].append('${MODULE_NAME} = ${INSTANCE_NAME}.modules.${MODULE_NAME}.views:blueprint')\n\
+    with open('entry_points.txt', 'r') as f:\n\
+    entry_point = None\n\
+    for line in [l.rstrip() for l in f]:\n\
+        if line.startswith('[') and line.endswith(']'):\n\
+            entry_point = line.lstrip('[').rstrip(']')\n\
+        else:\n\
+            if 'entry_points' not in kwargs:\n\
+                kwargs['entry_points'] = {}\n\
+            if entry_point not in kwargs['entry_points']:\n\
+                kwargs['entry_points'][entry_point] = []\n\
+            if entry_point and line > '':\n\
+                kwargs['entry_points'][entry_point].append(line)\n\
     setup(**kwargs)\n\
 " ${WORKDIR}/${INSTANCE_NAME}/setup.py
 
 sudo sed -i 's/^setup(/my_setup(/' ${WORKDIR}/${INSTANCE_NAME}/setup.py
 
 sudo sed -i "/^\[packages\]/a \
+numpy = \">1.16.0\"\n\
 email_validator = \">=1.0.5\"\n\
 sqlalchemy = \"<1.3.6\"\n\
 celery = \">=4.4.2\"\n\
 wtforms = \"<2.3.0\"\
 " ${WORKDIR}/${INSTANCE_NAME}/Pipfile
 
+exit 1
 # Adjust ip addresses of allowed host
 #ALLOWED_HOSTS=`ifconfig |grep 'inet .* netmask' | awk '{printf(",'\''%s'\''", $2);}'`
 #docker exec ${INSTANCE_NAME}-bootstrap sed -i 's/APP_ALLOWED_HOSTS = \[\(.*\)\]/APP_ALLOWED_HOSTS = [\1'"${ALLOWED_HOSTS}"']/' ${WORKDIR}/${INSTANCE_NAME}/${INSTANCE_NAME}/config.py
